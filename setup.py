@@ -37,7 +37,7 @@ setup(
     },
 
     project_urls={
-        'Repo': '',
+        'Repo': 'https://github.com/neophocion/chunkyp',
     },
     classifiers=[
         'Development Status :: 3 - Alpha',
