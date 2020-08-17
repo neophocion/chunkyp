@@ -8,16 +8,16 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='chunkyp',
-    version='0.0.1',
+    version='0.0.2',
     license='apache-2.0',
     description='Ray-based preprocesisng pipeline.',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='',
-    download_url='',
+    url='https://github.com/neophocion/chunkyp',
+    download_url='https://github.com/neophocion/chunkyp/releases',
     author='Neo Phocion',
     author_email='neophocion@protonmail.com',
-    keywords=['ray', 'preprocessing', 'nlp', 'cleaning', ''],
+    keywords=['ray', 'preprocessing', 'nlp', 'cleaning', 'workflow'],
     packages=find_packages(),  # Required
     python_requires='>=3.5, <4',
     install_requires=[
@@ -35,7 +35,6 @@ setup(
 
     entry_points={
     },
-
     project_urls={
         'Repo': 'https://github.com/neophocion/chunkyp',
     },

@@ -2,6 +2,7 @@ import ray
 import psutil
 import math
 import logging
+import types
 
 from typing import Iterator, Callable, List
 from .utils import chunk_iterator, process_record
@@ -32,6 +33,7 @@ def p(
         A tuple of two functions (_p, __p) which are used by chunkyp to run the funcs in the single-thread or
         as part of the parallel mode.
     """
+    kwargs = {k: (ray.get(v) if isinstance(v, ray._raylet.ObjectID) else v) for k, v in kwargs.items()}
 
     def _p(records):
         for record in records:
@@ -46,7 +48,7 @@ def p(
                     func,
                     record,
                     out_field,
-                    **{k: (ray.get(v) if isinstance(v, ray._raylet.ObjectID) else v) for k, v in kwargs.items()}
+                    **kwargs
                 )
             )
         return processed
@@ -78,8 +80,8 @@ def pipe(
 def ppipe(
         records: Iterator[dict],
         *funcs,
-        chunksize: int or None = None,
-        n_pipes: int or None = None,
+        records_in_memory: int or None = None,
+        processes: int or None = None,
 ) -> Iterator[dict]:
     """
     A multi-threaded parallel pipe (or ppipe) which pipes records through it in parallel. Note that each record is still
@@ -90,46 +92,55 @@ def ppipe(
     Args:
         records: An iterator of dictionaries. We call these dictionaries "records" throughout chunkyp.
         *funcs: A list of p functions to be applied to the records.
-        chunksize: The number of records to pass to each one of the parallel pipes.
-        n_pipes: The number of pipes to launch. (Default: #logical_cores - 1)
+        records_in_memory: The number of records to pass to each one of the parallel pipes.
+        processes: The number of pipes to launch in parallel. (Default: #logical_cores - 1)
     Returns:
         A generator of the resulting records modified by the p functions.
     """
 
+    # initialize ray if user hasn't already
     if not ray.is_initialized():
-        raise Exception("ray is not running!")
+        logging.warning('Ray is not running. Starting ray!')
+        ray.init()
 
-    if n_pipes is None:
-        n_pipes = psutil.cpu_count(logical=True) - 1 # number of logical cores (threads) on system
-
-    iter_len = len(records) if hasattr(records, '__len__') else None
-
-    if iter_len and chunksize > iter_len:
-        chunksize = iter_len
-        logging.info(f'reducing batch_size to {chunksize}')
-
+    # define a ray_pipe which wraps a _ppipe functions which actually handles the records
     def _ppipe(
-        records: Iterator[dict],
-        *funcs
+            records: Iterator[dict],
+            *funcs
     ):
         result = records
         for f in funcs:
             result = f[1](records=result)  # f[1] selects _pp: the parallel p function
         return result
-
     ray_pipe = ray.remote(_ppipe)
 
-    # fill up memory with outer loop
-    batches = chunk_iterator(n=chunksize, iterable=records)
+    # set number of processes if user hasn't already
+    if processes is None:
+        processes = psutil.cpu_count(logical=True) - 1  # number of logical cores (threads) on system
+
+    # if records_in_memory is not set AND the a record generator is passed - uwind it into a list
+    if records_in_memory is None and isinstance(records, types.GeneratorType):
+        records = list(records)
+
+    # prepare batches
+    if records_in_memory is None:
+        batches = [records]
+    else:
+        batches = chunk_iterator(n=records_in_memory, iterable=records)
+
+    print('chunksize', records_in_memory)
 
     for batch in batches:
-        chunks = chunk_iterator(n=math.ceil(chunksize / n_pipes), iterable=batch)
+        batch = list(batch)  # read into memory
 
-        # parallelize with inner loop
-        for chunk in chunks:
+        print('batch_len:', len(batch))
 
-            futures = ray_pipe.remote(chunk, *funcs)
-            results = ray.get(futures)
+        # chunk so we can parallelize
+        chunks = chunk_iterator(n=math.ceil(len(batch) / processes), iterable=batch)
 
-            for r in results:
-                yield r
+        futures = [ray_pipe.remote(list(chunk), *funcs) for chunk in chunks]
+        results = ray.get(futures)
+
+        for result in results:
+            for record in result:
+                yield record

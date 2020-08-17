@@ -55,7 +55,7 @@ def test_ppipe():
         p('headline', uppercase, 'headline'),
         p('headline', cleanup, 'clean_headline', words=['THE']),
         p('clean_headline', lambda x: x.upper(), 'clean_headline'),
-        chunksize=10
+        records_in_memory=10
     )
 
     ray.init()
