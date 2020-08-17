@@ -1,6 +1,8 @@
 # chunkyp
 
 [![Actions Status](https://github.com/neophocion/chunkyp/workflows/Tests/badge.svg)](https://github.com/neophocion/chunkyp/actions)
+[![Actions Status](https://img.shields.io/github/license/neophocion/chunkyp)]
+![Version](https://img.shields.io/github/v/release/neophocion/chunkyp.svg)
 
 A small and concise data preprocessing library inspired by common NLP preprocessing workflows. 
 
