@@ -1,5 +1,7 @@
 # chunkyp
 
+[![Actions Status](https://github.com/neophocion/chunkyp/workflows/Tests/badge.svg)](https://github.com/neophocion/chunkyp/actions)
+
 A small and concise data preprocessing library inspired by common NLP preprocessing workflows. 
 
 Supports [ray](https://github.com/ray-project/ray).
