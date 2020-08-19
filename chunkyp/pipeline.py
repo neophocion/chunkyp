@@ -3,6 +3,7 @@ import psutil
 import math
 import logging
 import types
+import itertools
 
 from typing import Iterator, Callable, List
 from .utils import chunk_iterator, process_record
@@ -98,28 +99,21 @@ def ppipe(
         A generator of the resulting records modified by the p functions.
     """
 
+    ray_started_by_method = False
+
     # initialize ray if user hasn't already
     if not ray.is_initialized():
         logging.warning('Ray is not running. Starting ray!')
         ray.init()
-
-    # define a ray_pipe which wraps a _ppipe functions which actually handles the records
-    def _ppipe(
-            records: Iterator[dict],
-            *funcs
-    ):
-        result = records
-        for f in funcs:
-            result = f[1](records=result)  # f[1] selects _pp: the parallel p function
-        return result
-    ray_pipe = ray.remote(_ppipe)
+        ray_started_by_method = True
 
     # set number of processes if user hasn't already
     if processes is None:
         processes = psutil.cpu_count(logical=True) - 1  # number of logical cores (threads) on system
 
     # if records_in_memory is not set AND the a record generator is passed - uwind it into a list
-    if records_in_memory is None and isinstance(records, types.GeneratorType):
+    if records_in_memory is None and (isinstance(records, types.GeneratorType) or isinstance(records, itertools.chain)):
+        print('unwinding!')
         records = list(records)
 
     # prepare batches
@@ -128,7 +122,15 @@ def ppipe(
     else:
         batches = chunk_iterator(n=records_in_memory, iterable=records)
 
-    print('chunksize', records_in_memory)
+
+    # define a ray_pipe which wraps a _ppipe functions which actually handles the records
+    def _ppipe(records: Iterator[dict], *funcs):
+        result = records
+        for f in funcs:
+            result = f[1](records=result)  # f[1] selects _pp: the parallel p function
+        return result
+
+    ray_pipe = ray.remote(_ppipe)
 
     for batch in batches:
         batch = list(batch)  # read into memory
@@ -144,3 +146,6 @@ def ppipe(
         for result in results:
             for record in result:
                 yield record
+
+    if ray_started_by_method is True:
+        ray.shutdown()
